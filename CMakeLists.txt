@@ -3,7 +3,12 @@ project(the_colonizer)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(the_colonizer main.cpp)
+add_executable(the_colonizer main.cpp
+        World.cpp
+        lib.h
+        Tile.cpp
+        Tile.h
+)
 
 # Linux/macOS: use pkg-config (system packages)
 if(UNIX AND NOT WIN32)

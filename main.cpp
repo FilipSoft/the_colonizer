@@ -5,20 +5,13 @@
 #include <SDL_mixer.h>
 #include "car.h"
 #include "soundtrack.h"
-
-//create TExture object
-SDL_Texture* loadTextureFromMem(SDL_Renderer* ren,
-                                       const unsigned char* data,
-                                       std::size_t len) {
-    SDL_RWops* rw = SDL_RWFromConstMem(data, static_cast<int>(len));
-    if (!rw) { std::cerr << "SDL_RWFromConstMem failed\n"; return nullptr; }
-
-    SDL_Surface* surf = IMG_Load_RW(rw, 1); // frees rw
-    if (!surf) { std::cerr << "IMG_Load_RW: " << IMG_GetError() << "\n"; return nullptr; }
-
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(ren, surf);
-    SDL_FreeSurface(surf);
-    return tex;
+#include "World.cpp"
+//helping function
+static void render_now(SDL_Renderer* ren) {
+    SDL_SetRenderDrawColor(ren, 20,20,20,255);
+    SDL_RenderClear(ren);
+    // draw your scene...
+    SDL_RenderPresent(ren);
 }
 
 int main(int argc, char* argv[]) {
@@ -65,28 +58,77 @@ int main(int argc, char* argv[]) {
     }
 
 
+    //setting up graphics
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << SDL_GetError() << "\n"; return 1; }
     if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) { std::cerr << IMG_GetError() << "\n"; return 1; }
 
-    SDL_Window* w = SDL_CreateWindow("The_colonizer",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, 0);
-    SDL_Renderer* r = SDL_CreateRenderer(w, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    //creating window
+    SDL_Window *window= SDL_CreateWindow("The_colonizer",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    //creating renderer
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_GL_SetSwapInterval(1);
+    //create texture
+    SDL_Texture* texture = loadTextureFromMem(renderer, __img_car_png, __img_car_png_len);
+    if (!texture) return 1;
 
-    SDL_Texture* tex = loadTextureFromMem(r, __img_car_png, __img_car_png_len);
-    if (!tex) return 1;
+    //set fullscreen and virtual resolution
+    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    bool run = true; SDL_Event e; int x = 0;
-    while (run) {
-        while (SDL_PollEvent(&e)) if (e.type == SDL_QUIT) run = false;
-        x = (x + 3) % 800;
+    World* world = new World(20,20,renderer);
 
-        SDL_SetRenderDrawColor(r, 18,18,22,255); SDL_RenderClear(r);
+    bool running = true;
+    SDL_Event e;
+    int x = 0;
+
+    while (running) {
+        SDL_PollEvent(&e);
+        if (e.type == SDL_QUIT) {
+            running = false;
+        }
+        else if (e.type == SDL_KEYDOWN) {
+            if (e.key.keysym.sym == SDLK_ESCAPE) {
+                running = false;  // quit on ESC
+            }
+            if (e.key.keysym.sym == SDLK_F11) {
+                Uint32 flags = SDL_GetWindowFlags(window);
+                if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+                    SDL_SetWindowFullscreen(window, 0);
+                } else {
+                    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                }
+            }
+        }
+        if (e.type == SDL_WINDOWEVENT) {
+            switch (e.window.event) {
+                case SDL_WINDOWEVENT_EXPOSED:
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+                case SDL_WINDOWEVENT_RESIZED:
+                    // Recompute layout, viewport, etc., then redraw once
+                    render_now(renderer);
+                case SDL_WINDOWEVENT_MOVED:
+                    // Optional: redraw after move to avoid stale blits
+                    render_now(renderer);
+            }
+        }
+
+        x = (x + 3) % SCREEN_WIDTH;
+
+        world->renderMAp();
+
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 18,18,22,255);
         SDL_Rect dst{ x, 200, 256, 128 };
-        SDL_RenderCopy(r, tex, nullptr, &dst);
-        SDL_RenderPresent(r);
+
+        SDL_RenderCopy(renderer, texture, nullptr, &dst);
+        SDL_RenderPresent(renderer);
     }
 
-    SDL_DestroyTexture(tex); SDL_DestroyRenderer(r); SDL_DestroyWindow(w);
+
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
     IMG_Quit(); SDL_Quit();
     return 0;
 }
